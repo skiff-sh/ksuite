@@ -1,0 +1,11 @@
+name: PR
+on:
+  push:
+    branches-ignore:
+      - main
+      - master
+jobs:
+  go-test:
+    name: Go test
+    uses: skiff-sh/gh-actions/.github/workflows/go-test.yml@master
+    secrets: inherit
