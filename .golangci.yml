@@ -1,0 +1,73 @@
+linters-settings:
+  funlen:
+    ignore-comments: true
+    lines: 160
+    statements: 60
+  gocyclo:
+    min-complexity: 15
+  goimports:
+    local-prefixes: "github.com/skiff-sh/ksuite"
+  misspell:
+    locale: US
+  nolintlint:
+    allow-unused: false # report any unused nolint directives
+    require-explanation: true # require an explanation for nolint directives
+    require-specific: false # don't require nolint directives to be specific about which linter is being skipped
+  revive:
+    confidence: 0
+    rules:
+      - name: blank-imports
+        disabled: true
+  dogsled:
+    max-blank-identifiers: 3
+  nakedret:
+    max-func-lines: 40
+  stylecheck:
+    checks:
+      - "-ST1000"
+  gosec:
+    excludes:
+      - G304
+      - G601
+      - G115
+linters:
+  disable-all: true
+  enable:
+    - bodyclose
+    - dogsled
+    - dupl
+    - errcheck
+    - copyloopvar
+    - funlen
+    - gochecknoinits
+    - gocritic
+    - goconst
+    - gocyclo
+    - gofumpt
+    - revive
+    - rowserrcheck
+    - goprintffuncname
+    - gosec
+    - gosimple
+    - govet
+    - ineffassign
+    - misspell
+    - nakedret
+    - noctx
+    - nolintlint
+    - staticcheck
+    - stylecheck
+    - sqlclosecheck
+    - typecheck
+    - unconvert
+    - unparam
+    - unused
+    - whitespace
+
+issues:
+  exclude-rules:
+    - linters:
+        - revive
+      text: "^(package-comments)"
+  # enable issues excluded by default
+  exclude-use-default: false
