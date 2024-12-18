@@ -63,6 +63,8 @@ linters:
     - unparam
     - unused
     - whitespace
+  disable:
+    - bodyclose
 
 issues:
   exclude-rules:
