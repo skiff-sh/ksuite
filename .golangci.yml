@@ -33,7 +33,6 @@ linters-settings:
 linters:
   disable-all: true
   enable:
-    - bodyclose
     - dogsled
     - dupl
     - errcheck
@@ -63,9 +62,7 @@ linters:
     - unparam
     - unused
     - whitespace
-  disable:
-    - bodyclose # doesn't work properly -> https://github.com/timakin/bodyclose/issues/60
-
+    # bodyclose doesn't work properly -> https://github.com/timakin/bodyclose/issues/60
 issues:
   exclude-rules:
     - linters:
