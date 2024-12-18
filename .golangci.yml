@@ -64,7 +64,7 @@ linters:
     - unused
     - whitespace
   disable:
-    - bodyclose
+    - bodyclose # doesn't work properly -> https://github.com/timakin/bodyclose/issues/60
 
 issues:
   exclude-rules:
