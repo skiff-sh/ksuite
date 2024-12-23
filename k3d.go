@@ -20,6 +20,8 @@ import (
 	"time"
 )
 
+var InternalNodePort = uint16(30090)
+
 func CreateCluster(ctx context.Context) (*Cluster, error) {
 	tag := version.K3sVersion
 	simpleClusterConfig := v1alpha5.SimpleConfig{
@@ -53,10 +55,17 @@ func CreateCluster(ctx context.Context) (*Cluster, error) {
 	}
 
 	// Expose the loadbalancer (allows for ingress)
-	ingressPort := findFreePort(9090)
+	exposedIngressPort := findFreePort(9090)
 	simpleClusterConfig.Ports = append(simpleClusterConfig.Ports, v1alpha5.PortWithNodeFilters{
-		Port:        fmt.Sprintf("%d:80", ingressPort),
+		Port:        fmt.Sprintf("%d:80", exposedIngressPort),
 		NodeFilters: []string{"loadbalancer"},
+	})
+
+	// Expose the agent (allows for node ports)
+	exposedNodePort := findFreePort(9091)
+	simpleClusterConfig.Ports = append(simpleClusterConfig.Ports, v1alpha5.PortWithNodeFilters{
+		Port:        fmt.Sprintf("%d:%d", exposedNodePort, InternalNodePort),
+		NodeFilters: []string{"agent"},
 	})
 
 	clusterConfig, _ := config.TransformSimpleToClusterConfig(ctx, runtimes.SelectedRuntime, simpleClusterConfig, "")
@@ -80,9 +89,11 @@ func CreateCluster(ctx context.Context) (*Cluster, error) {
 	}
 
 	out := &Cluster{
-		K3D:          &clusterConfig.Cluster,
-		RegistryAddr: fmt.Sprintf("localhost:%d", registryPort),
-		IngressPort:  ingressPort,
+		K3D:              &clusterConfig.Cluster,
+		RegistryAddr:     fmt.Sprintf("localhost:%d", registryPort),
+		IngressPort:      exposedIngressPort,
+		ExposedNodePort:  exposedNodePort,
+		InternalNodePort: InternalNodePort,
 	}
 
 	out.Context, out.Cancel = context.WithCancelCause(ctx)
@@ -114,13 +125,15 @@ func DeleteCluster(ctx context.Context, cl *Cluster) error {
 }
 
 type Cluster struct {
-	Context      context.Context
-	Cancel       context.CancelCauseFunc
-	KubeConfPath string
-	KubeConfig   clientcmd.ClientConfig
-	K3D          *k3d.Cluster
-	RegistryAddr string
-	IngressPort  uint16
+	Context          context.Context
+	Cancel           context.CancelCauseFunc
+	KubeConfPath     string
+	KubeConfig       clientcmd.ClientConfig
+	K3D              *k3d.Cluster
+	RegistryAddr     string
+	IngressPort      uint16
+	ExposedNodePort  uint16
+	InternalNodePort uint16
 }
 
 func findFreePort(from uint16) uint16 {
@@ -134,7 +147,9 @@ func findFreePort(from uint16) uint16 {
 func isPortFree(port int) bool {
 	conn, _ := net.DialTimeout("tcp", ":"+strconv.Itoa(port), 3*time.Second)
 	if conn != nil {
-		defer conn.Close()
+		defer func(conn net.Conn) {
+			_ = conn.Close()
+		}(conn)
 		return false
 	}
 	return true
