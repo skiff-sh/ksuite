@@ -65,7 +65,7 @@ func CreateCluster(ctx context.Context) (*Cluster, error) {
 	exposedNodePort := findFreePort(9091)
 	simpleClusterConfig.Ports = append(simpleClusterConfig.Ports, v1alpha5.PortWithNodeFilters{
 		Port:        fmt.Sprintf("%d:%d", exposedNodePort, InternalNodePort),
-		NodeFilters: []string{"agent"},
+		NodeFilters: []string{"agent:0"},
 	})
 
 	clusterConfig, _ := config.TransformSimpleToClusterConfig(ctx, runtimes.SelectedRuntime, simpleClusterConfig, "")
