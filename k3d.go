@@ -22,7 +22,26 @@ import (
 
 var InternalNodePort = uint16(30090)
 
-func CreateCluster(ctx context.Context) (*Cluster, error) {
+type CreateClusterOpts struct {
+	Use []string
+}
+
+type CreateClusterOpt func(c *CreateClusterOpts)
+
+func WithUseRegistry(reg string) CreateClusterOpt {
+	return func(c *CreateClusterOpts) {
+		if reg == "" {
+			return
+		}
+		c.Use = append(c.Use, reg)
+	}
+}
+
+func CreateCluster(ctx context.Context, o ...CreateClusterOpt) (*Cluster, error) {
+	op := &CreateClusterOpts{}
+	for _, v := range o {
+		v(op)
+	}
 	tag := version.K3sVersion
 	simpleClusterConfig := v1alpha5.SimpleConfig{
 		Image:   fmt.Sprintf("%s:%s", k3d.DefaultK3sImageRepo, tag),
@@ -32,12 +51,16 @@ func CreateCluster(ctx context.Context) (*Cluster, error) {
 
 	simpleClusterConfig.Options.K3dOptions.Wait = true
 
-	registryPort := findFreePort(10562)
+	registryPort := FindFreePort(10562)
 
-	simpleClusterConfig.Registries.Create = &v1alpha5.SimpleConfigRegistryCreateConfig{
-		Name:     simpleClusterConfig.Name,
-		Host:     "0.0.0.0",
-		HostPort: strconv.Itoa(int(registryPort)),
+	if len(op.Use) > 0 {
+		simpleClusterConfig.Registries.Use = op.Use
+	} else {
+		simpleClusterConfig.Registries.Create = &v1alpha5.SimpleConfigRegistryCreateConfig{
+			Name:     simpleClusterConfig.Name,
+			Host:     "0.0.0.0",
+			HostPort: strconv.Itoa(int(registryPort)),
+		}
 	}
 
 	exposeAPI := &k3d.ExposureOpts{}
@@ -55,22 +78,28 @@ func CreateCluster(ctx context.Context) (*Cluster, error) {
 	}
 
 	// Expose the loadbalancer (allows for ingress)
-	exposedIngressPort := findFreePort(9090)
+	exposedIngressPort := FindFreePort(9090)
 	simpleClusterConfig.Ports = append(simpleClusterConfig.Ports, v1alpha5.PortWithNodeFilters{
 		Port:        fmt.Sprintf("%d:80", exposedIngressPort),
 		NodeFilters: []string{"loadbalancer"},
 	})
 
 	// Expose the agent (allows for node ports)
-	exposedNodePort := findFreePort(9091)
+	exposedNodePort := FindFreePort(9091)
 	simpleClusterConfig.Ports = append(simpleClusterConfig.Ports, v1alpha5.PortWithNodeFilters{
 		Port:        fmt.Sprintf("%d:%d", exposedNodePort, InternalNodePort),
-		NodeFilters: []string{"agent:0"},
+		NodeFilters: []string{"server:0"},
 	})
 
-	clusterConfig, _ := config.TransformSimpleToClusterConfig(ctx, runtimes.SelectedRuntime, simpleClusterConfig, "")
+	clusterConfig, err := config.TransformSimpleToClusterConfig(ctx, runtimes.SelectedRuntime, simpleClusterConfig, "")
+	if err != nil {
+		return nil, err
+	}
 
-	clusterConfig, _ = config.ProcessClusterConfig(*clusterConfig)
+	clusterConfig, err = config.ProcessClusterConfig(*clusterConfig)
+	if err != nil {
+		return nil, err
+	}
 
 	err = k3dcluster.ClusterRun(ctx, runtimes.SelectedRuntime, clusterConfig)
 	defer func() {
@@ -94,6 +123,11 @@ func CreateCluster(ctx context.Context) (*Cluster, error) {
 		IngressPort:      exposedIngressPort,
 		ExposedNodePort:  exposedNodePort,
 		InternalNodePort: InternalNodePort,
+	}
+
+	out.HostIP, err = GetInternalIP()
+	if err != nil {
+		return nil, err
 	}
 
 	out.Context, out.Cancel = context.WithCancelCause(ctx)
@@ -134,17 +168,18 @@ type Cluster struct {
 	IngressPort      uint16
 	ExposedNodePort  uint16
 	InternalNodePort uint16
+	HostIP           string
 }
 
-func findFreePort(from uint16) uint16 {
-	for !isPortFree(int(from)) {
+func FindFreePort(from uint16) uint16 {
+	for !IsPortFree(int(from)) {
 		from++
 	}
 
 	return from
 }
 
-func isPortFree(port int) bool {
+func IsPortFree(port int) bool {
 	conn, _ := net.DialTimeout("tcp", ":"+strconv.Itoa(port), 3*time.Second)
 	if conn != nil {
 		defer func(conn net.Conn) {
@@ -153,4 +188,21 @@ func isPortFree(port int) bool {
 		return false
 	}
 	return true
+}
+
+func GetInternalIP() (string, error) {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "", err
+	}
+
+	for _, v := range addrs {
+		if ipnet, ok := v.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				return ipnet.IP.String(), nil
+			}
+		}
+	}
+
+	return "", nil
 }

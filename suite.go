@@ -27,6 +27,8 @@ type KubeSuite struct {
 	SkipCleanNamespaces []string
 	// Don't touch the namespaces that match the selectors.
 	SkipCleanNamespaceSelectors []string
+	// A K3D registry string pointing to external registry.
+	UseRegistry string
 }
 
 func (k *KubeSuite) AfterTest(_, _ string) {
@@ -80,7 +82,11 @@ func (k *KubeSuite) TearDownSuite() {
 func (k *KubeSuite) SetupSuite() {
 	ctx := context.Background()
 	var err error
-	k.Cluster, err = CreateCluster(ctx)
+	if k.UseRegistry == "" {
+		k.UseRegistry = os.Getenv("K3D_REGISTRY")
+	}
+
+	k.Cluster, err = CreateCluster(ctx, WithUseRegistry(k.UseRegistry))
 	if err != nil {
 		panic(err)
 	}
