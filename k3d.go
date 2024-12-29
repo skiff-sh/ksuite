@@ -20,10 +20,9 @@ import (
 	"time"
 )
 
-var InternalNodePort = uint16(30090)
-
 type CreateClusterOpts struct {
-	Use []string
+	Use         []string
+	ExposePorts []v1alpha5.PortWithNodeFilters
 }
 
 type CreateClusterOpt func(c *CreateClusterOpts)
@@ -34,6 +33,24 @@ func WithUseRegistry(reg string) CreateClusterOpt {
 			return
 		}
 		c.Use = append(c.Use, reg)
+	}
+}
+
+func WithIngressPort(host, con uint16) CreateClusterOpt {
+	return func(c *CreateClusterOpts) {
+		c.ExposePorts = append(c.ExposePorts, v1alpha5.PortWithNodeFilters{
+			Port:        fmt.Sprintf("%d:%d", host, con),
+			NodeFilters: []string{"loadbalancer"},
+		})
+	}
+}
+
+func WithNodePort(host, con uint16) CreateClusterOpt {
+	return func(c *CreateClusterOpts) {
+		c.ExposePorts = append(c.ExposePorts, v1alpha5.PortWithNodeFilters{
+			Port:        fmt.Sprintf("%d:%d", host, con),
+			NodeFilters: []string{"server:0"},
+		})
 	}
 }
 
@@ -77,19 +94,9 @@ func CreateCluster(ctx context.Context, o ...CreateClusterOpt) (*Cluster, error)
 		HostPort: exposeAPI.Binding.HostPort,
 	}
 
-	// Expose the loadbalancer (allows for ingress)
-	exposedIngressPort := FindFreePort(9090)
-	simpleClusterConfig.Ports = append(simpleClusterConfig.Ports, v1alpha5.PortWithNodeFilters{
-		Port:        fmt.Sprintf("%d:80", exposedIngressPort),
-		NodeFilters: []string{"loadbalancer"},
-	})
-
-	// Expose the agent (allows for node ports)
-	exposedNodePort := FindFreePort(9091)
-	simpleClusterConfig.Ports = append(simpleClusterConfig.Ports, v1alpha5.PortWithNodeFilters{
-		Port:        fmt.Sprintf("%d:%d", exposedNodePort, InternalNodePort),
-		NodeFilters: []string{"server:0"},
-	})
+	for _, v := range op.ExposePorts {
+		simpleClusterConfig.Ports = append(simpleClusterConfig.Ports, v)
+	}
 
 	clusterConfig, err := config.TransformSimpleToClusterConfig(ctx, runtimes.SelectedRuntime, simpleClusterConfig, "")
 	if err != nil {
@@ -118,11 +125,8 @@ func CreateCluster(ctx context.Context, o ...CreateClusterOpt) (*Cluster, error)
 	}
 
 	out := &Cluster{
-		K3D:              &clusterConfig.Cluster,
-		RegistryAddr:     fmt.Sprintf("localhost:%d", registryPort),
-		IngressPort:      exposedIngressPort,
-		ExposedNodePort:  exposedNodePort,
-		InternalNodePort: InternalNodePort,
+		K3D:          &clusterConfig.Cluster,
+		RegistryAddr: fmt.Sprintf("localhost:%d", registryPort),
 	}
 
 	out.HostIP, err = GetInternalIP()
@@ -159,16 +163,13 @@ func DeleteCluster(ctx context.Context, cl *Cluster) error {
 }
 
 type Cluster struct {
-	Context          context.Context
-	Cancel           context.CancelCauseFunc
-	KubeConfPath     string
-	KubeConfig       clientcmd.ClientConfig
-	K3D              *k3d.Cluster
-	RegistryAddr     string
-	IngressPort      uint16
-	ExposedNodePort  uint16
-	InternalNodePort uint16
-	HostIP           string
+	Context      context.Context
+	Cancel       context.CancelCauseFunc
+	KubeConfPath string
+	KubeConfig   clientcmd.ClientConfig
+	K3D          *k3d.Cluster
+	RegistryAddr string
+	HostIP       string
 }
 
 func FindFreePort(from uint16) uint16 {
