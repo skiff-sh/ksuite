@@ -59,6 +59,10 @@ func CreateCluster(ctx context.Context, o ...CreateClusterOpt) (*Cluster, error)
 	for _, v := range o {
 		v(op)
 	}
+	reg := os.Getenv("K3D_REGISTRY")
+	if reg != "" && len(op.Use) == 0 {
+		op.Use = append(op.Use, reg)
+	}
 	tag := version.K3sVersion
 	simpleClusterConfig := v1alpha5.SimpleConfig{
 		Image:   fmt.Sprintf("%s:%s", k3d.DefaultK3sImageRepo, tag),
