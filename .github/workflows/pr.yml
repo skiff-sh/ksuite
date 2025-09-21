@@ -9,3 +9,7 @@ jobs:
     name: Go test
     uses: skiff-sh/gh-actions/.github/workflows/go-test.yml@master
     secrets: inherit
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
