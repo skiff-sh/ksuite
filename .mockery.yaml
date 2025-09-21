@@ -1,0 +1,7 @@
+recursive: true
+all: true
+filename: "mock_{{ .InterfaceName | snakecase }}.go"
+dir: "pkg/mocks/{{ base .SrcPackageName }}mocks"
+pkgname: "{{ base .SrcPackageName }}mocks"
+structname: "{{.InterfaceName}}"
+template: testify
